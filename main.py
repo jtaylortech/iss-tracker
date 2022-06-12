@@ -1,35 +1,56 @@
 import requests
 from datetime import datetime
+from credentials import *
+import smtplib
+import time
+
+MY_EMAIL = jt_email
+MY_PWORD = jt_pword
+TO_EMAIL = alt_email
 
 my_lat = 32.613003
 my_lng = -83.624199
 
-# response = requests.get(url="http://api.open-notify.org/iss-now.json")
-# response.raise_for_status()
 
-# data = response.json()
+def is_iss_overhead():
+    response = requests.get(url="http://api.open-notify.org/iss-now.json")
+    response.raise_for_status()
+    data = response.json()
 
-# longitude = data["iss_position"]["longitude"]
-# latitude = data["iss_position"]["latitude"]
+    iss_longitude = float(data["iss_position"]["longitude"])
+    iss_latitude = float(data["iss_position"]["latitude"])
 
-# iss_position = (longitude, latitude)
+    # my position is within +- 5 degrees of the iss position
+    if my_lat-5 <= iss_latitude <= my_lat+5 and my_lng-5 <= iss_longitude <= my_lng+5:
+        return True
 
-# print(iss_position)
 
-parameters = {
-    "lat": my_lat,
-    "lng": my_lng,
-    "formatted": 0,
-}
+def is_night():
+    parameters = {
+        "lat": my_lat,
+        "lng": my_lng,
+        "formatted": 0,
+    }
+    response = requests.get(url="https://api.sunrise-sunset.org/json", params = parameters)
+    response.raise_for_status()
+    data = response.json()
+    sunrise = int(data["results"]["sunrise"].split("T")[1].split(":")[0])
+    sunset = int(data["results"]["sunset"].split("T")[1].split(":")[0])
 
-response = requests.get(url="https://api.sunrise-sunset.org/json", params = parameters)
-response.raise_for_status()
-data = response.json()
-sunrise = data["results"]["sunrise"].split("T")[1].split(":")[0]
-sunset = data["results"]["sunset"].split("T")[1].split(":")[0]
+    time_now = datetime.now().hour
 
-print(sunrise)
-print(sunset)
+    if time_now >= sunset or time_now <=sunrise:
+        return True
+        # its dark
 
-time_now = datetime.now()
-print(time_now.hour) # I needed the current hour to be displayed so I can know how far I am off from the sunrise and sunset
+while True:
+    time.sleep(60)
+    if is_iss_overhead() and is_night():
+        connection = smtplib.SMTP("smtp.gmail.com")
+        connection.starttls()
+        connection.login(MY_EMAIL, MY_PWORD)
+        connection.sendmail(
+            from_addr=MY_EMAIL,
+            to_addr=TO_EMAIL,
+            msg="Subject:Look Up🛰👆🏽\n\nThe ISS is above you in the sky! Your program is working "
+        )
